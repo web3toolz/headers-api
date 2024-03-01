@@ -28,16 +28,13 @@ func WebsocketHandler(subscribe func(string, func(*types.Header)) error, unsubsc
 
 		headersCh := make(chan *types.Header, 1)
 
-		defer func() {
-			close(headersCh)
-		}()
+		defer close(headersCh)
 
 		pingPongTicker := time.NewTicker(30 * time.Second)
 
 		defer pingPongTicker.Stop()
 
 		subId := uuid.NewString()
-
 		err = subscribe(subId, func(header *types.Header) {
 			headersCh <- header
 		})

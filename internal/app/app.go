@@ -47,11 +47,11 @@ func (app *App) createHTTPRouter(subscribe func(string, func(*types.Header)) err
 		AllowedMethods: []string{"GET", "OPTIONS", "HEAD"},
 		MaxAge:         300,
 	}))
-	// Routes
+	//Routes
 	router.Get(`/`, rest.HealthCheckHandler)
 	router.Get(`/ht`, rest.HealthCheckHandler)
 	router.Get(`/ws`, rest.WebsocketHandler(subscribe, unsubscribe))
-	router.Get(`/sse`, rest.SSEHandler)
+	router.Get(`/sse`, rest.SSEHandler(subscribe, unsubscribe))
 
 	return router
 }
