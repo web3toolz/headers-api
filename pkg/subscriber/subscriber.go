@@ -18,21 +18,17 @@ type IHeadersSubscriber interface {
 }
 
 type HeadersSubscriber struct {
+	ctx             context.Context
 	client          *ethclient.Client
 	isHTTP          bool
-	headers         chan *types.Header
-	interval        time.Duration
-	timeout         time.Duration
-	sub             ethereum.Subscription
+	publish         func(*types.Header)
 	unsubscribeFunc func()
 }
 
 func NewHeadersSubscriber(
 	ctx context.Context,
 	url string,
-	headers chan *types.Header,
-	timeout time.Duration,
-	interval time.Duration,
+	publish func(*types.Header),
 ) (*HeadersSubscriber, error) {
 	client, err := ethclient.DialContext(ctx, url)
 	isHTTP := false
@@ -50,26 +46,42 @@ func NewHeadersSubscriber(
 	}
 
 	return &HeadersSubscriber{
-		client:   client,
-		isHTTP:   isHTTP,
-		headers:  headers,
-		interval: interval,
-		timeout:  timeout,
+		ctx:     ctx,
+		client:  client,
+		isHTTP:  isHTTP,
+		publish: publish,
 	}, nil
 }
 
 func (s *HeadersSubscriber) subscribeWS() error {
-	s.sub = event.Resubscribe(time.Second*10, func(ctx context.Context) (event.Subscription, error) {
+	ch := make(chan *types.Header)
+
+	sub := event.Resubscribe(time.Second*10, func(ctx context.Context) (event.Subscription, error) {
 		log.Error("Trying to resubscribe")
-		return s.client.SubscribeNewHead(ctx, s.headers)
+		return s.client.SubscribeNewHead(ctx, ch)
 	})
-	s.unsubscribeFunc = s.sub.Unsubscribe
+
+	go func() {
+		for {
+			select {
+			case header := <-ch:
+				s.publish(header)
+			case <-s.ctx.Done():
+				close(ch)
+				sub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	s.unsubscribeFunc = sub.Unsubscribe
+
 	return nil
 }
 
-func (s *HeadersSubscriber) subscribeHTTP() error {
+func (s *HeadersSubscriber) subscribeHTTP(timeout time.Duration, interval time.Duration) error {
 	//var latestBlockNumber uint64
-	ticker := time.Tick(s.interval)
+	ticker := time.Tick(interval)
 	ctx, cancelFunc := context.WithCancel(context.Background())
 
 	s.unsubscribeFunc = cancelFunc
@@ -95,7 +107,7 @@ func (s *HeadersSubscriber) subscribeHTTP() error {
 				// TODO: if blocks were skipped (between latestBlockNumber and header.Number.Uint64()), resync them
 				if header != nil {
 					//latestBlockNumber = header.Number.Uint64()
-					s.headers <- header
+					s.publish(header)
 				}
 			case <-ctx.Done():
 				return
@@ -106,9 +118,9 @@ func (s *HeadersSubscriber) subscribeHTTP() error {
 	return nil
 }
 
-func (s *HeadersSubscriber) Subscribe() error {
+func (s *HeadersSubscriber) Subscribe(timeout time.Duration, interval time.Duration) error {
 	if s.isHTTP {
-		return s.subscribeHTTP()
+		return s.subscribeHTTP(timeout, interval)
 	} else {
 		return s.subscribeWS()
 	}
