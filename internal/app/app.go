@@ -16,28 +16,36 @@ import (
 	"headers-api/pkg/subscriber"
 	"log"
 	"net/http"
+	"sync"
 )
 
 type App struct {
 	config         *config.Config
+	mu             sync.Mutex
 	rawHeaders     chan *types.Header
 	cleanedHeaders chan *types.Header
 	dedup          dedup.IDeduplication
 	headersSubs    []subscriber.HeadersSubscriber
 	bus            eventbus.IEventBus
+	latestHeader   *types.Header
 }
 
 func NewApp(config *config.Config) *App {
 	bus := eventbus.New()
 	return &App{
 		config:      config,
+		mu:          sync.Mutex{},
 		dedup:       dedup.NewDeduplicationInstance(),
 		headersSubs: []subscriber.HeadersSubscriber{},
 		bus:         bus,
 	}
 }
 
-func (app *App) createHTTPRouter(subscribe func(string, func(*types.Header)) error, unsubscribe func(string)) *chi.Mux {
+func (app *App) createHTTPRouter(
+	subscribe func(string, func(*types.Header)) error,
+	unsubscribe func(string),
+	getLatestHeader func() *types.Header,
+) *chi.Mux {
 	router := chi.NewRouter()
 	// Middleware
 	router.Use(middleware.Recoverer)
@@ -50,6 +58,7 @@ func (app *App) createHTTPRouter(subscribe func(string, func(*types.Header)) err
 	//Routes
 	router.Get(`/`, rest.HealthCheckHandler)
 	router.Get(`/ht`, rest.HealthCheckHandler)
+	router.Get(`/latest`, rest.HTTPLatestHeaderHandler(getLatestHeader))
 	router.Get(`/ws`, rest.WebsocketHandler(subscribe, unsubscribe))
 	router.Get(`/sse`, rest.SSEHandler(subscribe, unsubscribe))
 
@@ -92,7 +101,10 @@ func (app *App) runDeduplicationWorker() error {
 	id := uuid.NewString()
 	err := app.bus.Subscribe("headers:raw", id, func(header *types.Header) {
 		if !app.dedup.Deduplicate(header.Hash().Hex()) {
+			app.mu.Lock()
 			app.bus.Publish("headers:cleaned", header)
+			app.latestHeader = header
+			app.mu.Unlock()
 		}
 	})
 	return err
@@ -105,6 +117,11 @@ func (app *App) Run() error {
 	unsubscribeFunc := func(id string) {
 		app.bus.Unsubscribe("headers:cleaned", id)
 	}
+	getLatestHeader := func() *types.Header {
+		app.mu.Lock()
+		defer app.mu.Unlock()
+		return app.latestHeader
+	}
 
 	err := app.runDeduplicationWorker()
 	if err != nil {
@@ -116,7 +133,7 @@ func (app *App) Run() error {
 		log.Fatal("Failed to create subscriptions", err)
 	}
 
-	mux := app.createHTTPRouter(subscribeFunc, unsubscribeFunc)
+	mux := app.createHTTPRouter(subscribeFunc, unsubscribeFunc, getLatestHeader)
 	log.Printf("Starting server on port %d\n", app.config.Port)
 	return http.ListenAndServe(fmt.Sprintf(":%d", app.config.Port), mux)
 }

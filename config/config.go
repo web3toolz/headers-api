@@ -50,6 +50,7 @@ func LoadConfigFromYaml(path string) (*Config, error) {
 	f, err := os.Open(filepath.Clean(path))
 
 	if err != nil && os.IsNotExist(err) {
+		log.Printf("Config with path %s not found", path)
 		f, err = openExampleConfig()
 	}
 

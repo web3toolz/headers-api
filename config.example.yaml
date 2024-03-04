@@ -2,7 +2,13 @@ port: 8000
 sources:
   - url: https://rpc.ankr.com/eth
     timeout: 10s
-    pollingInterval: 1s
+    pollingInterval: 5s
+  - url: https://cloudflare-eth.com
+    timeout: 10s
+    pollingInterval: 5s
+  - url: https://eth-pokt.nodies.app
+    timeout: 10s
+    pollingInterval: 5s
   - url: wss://ethereum.publicnode.com
     timeout:
     pollingInterval:

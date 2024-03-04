@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Test</title>
+    <script>
+        var ws;
+
+        function connect() {
+            var serverUrl = document.getElementById('serverUrl').value;
+            ws = new WebSocket(serverUrl);
+
+            ws.onopen = function (event) {
+                log('Connected');
+            };
+
+            ws.onclose = function (event) {
+                log('Disconnected');
+            };
+
+            ws.onmessage = function (event) {
+                log('Message from server: ' + event.data);
+            };
+
+            ws.onerror = function (event) {
+                log('Error: ' + JSON.stringify(event));
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+            }
+        }
+
+        function sendMessage() {
+            var message = document.getElementById('message').value;
+            if (ws) {
+                ws.send(message);
+                log('Sent: ' + message);
+            }
+        }
+
+        function log(message) {
+            var logElement = document.getElementById('log');
+            var messageElement = document.createElement('div');
+            messageElement.textContent = message;
+            logElement.appendChild(messageElement);
+            console.log(message)
+        }
+    </script>
+</head>
+<body>
+<h2>WebSocket Test</h2>
+<div>
+    <input type="text" id="serverUrl" value="ws://your-websocket-server.com/path"/>
+    <button onclick="connect()">Connect</button>
+    <button onclick="disconnect()">Disconnect</button>
+</div>
+<div>
+    <input type="text" id="message"/>
+    <button onclick="sendMessage()">Send Message</button>
+</div>
+<div id="log" style="border: 1px solid #ccc; padding: 10px; margin-top: 20px; height: 200px; overflow-y: scroll;"></div>
+</body>
+</html>
