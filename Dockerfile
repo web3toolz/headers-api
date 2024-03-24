@@ -16,6 +16,9 @@ WORKDIR /home/app
 RUN apk --no-cache add gcompat tini
 COPY --from=builder /headers-api /home/app/headers-api
 
+# copy default settings
+COPY config.example.yaml /home/app/config.example.yaml
+
 # expose default port
 EXPOSE 8000
 
