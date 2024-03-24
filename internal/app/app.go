@@ -58,6 +58,8 @@ func (app *App) createHTTPRouter(
 	//Routes
 	router.Get(`/`, rest.HealthCheckHandler)
 	router.Get(`/ht`, rest.HealthCheckHandler)
+	router.Head(`/ht`, rest.HealthCheckHandler)
+	router.Post(`/ht`, rest.HealthCheckHandler)
 	router.Get(`/latest`, rest.HTTPLatestHeaderHandler(getLatestHeader))
 	router.Get(`/ws`, rest.WebsocketHandler(subscribe, unsubscribe))
 	router.Get(`/sse`, rest.SSEHandler(subscribe, unsubscribe))
